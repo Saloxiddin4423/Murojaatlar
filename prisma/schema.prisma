@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  telegramId String   @unique
+  fullName   String?
+  phone      String?
+  createdAt  DateTime @default(now())
+
+  appeals    Appeal[]
+}
+
+model Appeal {
+  id           Int      @id @default(autoincrement())
+  appealNumber String   @unique
+  userId       Int
+  fullName     String
+  phone        String
+  address      String?
+  district     String
+  courtType    String
+  message      String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
