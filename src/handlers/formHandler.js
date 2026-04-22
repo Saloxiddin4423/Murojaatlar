@@ -1,39 +1,48 @@
-const { courtTypes, districts } = require("../config/constants");
+const { courtTypes, districts, menuButtons } = require("../config/constants");
 const { districtKeyboard, mainMenu } = require("../keyboards/keyboards");
 const { saveAppeal } = require("../services/appealService");
 const { resetForm } = require("../utils/helpers");
 const { getGroupId } = require("../config/routes");
 
 function registerForm(bot) {
-    bot.hears(courtTypes, (ctx) => {
-        if (ctx.session.form.step !== "courtType") return;
+    bot.hears(courtTypes, (ctx, next) => {
+        if (ctx.session.applicationForm?.step) return next();
+        if (!ctx.session.form || ctx.session.form.step !== "courtType") return next();
+
         ctx.session.form.courtType = ctx.message.text;
         ctx.session.form.step = "district";
-        ctx.reply("Tumanni tanlang:", districtKeyboard());
+        return ctx.reply("Tumanni tanlang:", districtKeyboard());
     });
 
-    bot.hears(districts, (ctx) => {
-        if (ctx.session.form.step !== "district") return;
+    bot.hears(districts, (ctx, next) => {
+        if (ctx.session.applicationForm?.step) return next();
+        if (!ctx.session.form || ctx.session.form.step !== "district") return next();
+
         ctx.session.form.district = ctx.message.text;
         ctx.session.form.step = "fullName";
-        ctx.reply("F.I.O kiriting:");
+        return ctx.reply("F.I.O kiriting:");
     });
 
-    bot.on("text", async (ctx) => {
+    bot.on("text", async (ctx, next) => {
+        if (ctx.session.applicationForm?.step) return next();
+
         const form = ctx.session.form;
         const text = ctx.message.text;
 
         if (
             text === "/start" ||
-            text === "📨 Murojaat yuborish" ||
-            text === "⬅️ Orqaga" ||
+            text === menuButtons?.appeal ||
+            text === menuButtons?.application ||
+            text === menuButtons?.courtsInfo ||
+            text === menuButtons?.back ||
+            text === menuButtons?.finishPhotos ||
             courtTypes.includes(text) ||
             districts.includes(text)
         ) {
-            return;
+            return next();
         }
 
-        if (!form.step) return;
+        if (!form?.step) return next();
 
         if (form.step === "fullName") {
             form.fullName = text;
@@ -75,16 +84,11 @@ Murojaat:
 ${form.message}
 `;
 
-                console.log("District:", form.district);
-                console.log("CourtType:", form.courtType);
-
                 const targetGroupId = getGroupId(form.district, form.courtType);
-                console.log("Target group id:", targetGroupId);
 
                 if (targetGroupId) {
                     try {
                         await bot.telegram.sendMessage(targetGroupId, groupText);
-                        console.log("Groupga yuborildi");
                     } catch (err) {
                         console.error(
                             "Groupga yuborishda xato:",
@@ -106,7 +110,11 @@ ${form.message}
                 await ctx.reply("Xatolik yuz berdi.", mainMenu());
                 resetForm(ctx);
             }
+
+            return;
         }
+
+        return next();
     });
 }
 

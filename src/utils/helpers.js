@@ -10,4 +10,22 @@ function resetForm(ctx) {
   };
 }
 
-module.exports = { resetForm };
+function resetApplicationForm(ctx) {
+  ctx.session.applicationForm = {
+    step: null,
+    courtType: "",
+    district: "",
+    applicationType: "",
+    applicantFullName: "",
+    phone: "",
+    address: "",
+    defendantFullName: "",
+    relationship: "",
+    meetingDate: "",
+    reviewReason: "",
+    passportPhotos: [],
+    signature: ""
+  };
+}
+
+module.exports = { resetForm, resetApplicationForm };

@@ -14,6 +14,18 @@ bot.use(
         phone: "",
         address: "",
         message: ""
+      },
+      applicationForm: {
+        step: null,
+        courtType: "",
+        district: "",
+        applicationType: "",
+        applicantFullName: "",
+        defendantFullName: "",
+        relationship: "",
+        meetingDate: "",
+        reviewReason: "",
+        passportPhotos: []
       }
     })
   })
