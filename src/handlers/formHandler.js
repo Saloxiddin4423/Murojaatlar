@@ -75,10 +75,22 @@ Murojaat:
 ${form.message}
 `;
 
+                console.log("District:", form.district);
+                console.log("CourtType:", form.courtType);
+
                 const targetGroupId = getGroupId(form.district, form.courtType);
+                console.log("Target group id:", targetGroupId);
 
                 if (targetGroupId) {
-                    await bot.telegram.sendMessage(targetGroupId, groupText);
+                    try {
+                        await bot.telegram.sendMessage(targetGroupId, groupText);
+                        console.log("Groupga yuborildi");
+                    } catch (err) {
+                        console.error(
+                            "Groupga yuborishda xato:",
+                            err.response?.description || err.message
+                        );
+                    }
                 } else {
                     console.log("Group ID topilmadi:", form.district, form.courtType);
                 }
@@ -97,9 +109,5 @@ ${form.message}
         }
     });
 }
-console.log("District:", form.district);
-console.log("CourtType:", form.courtType);
 
-const targetGroupId = getGroupId(form.district, form.courtType);
-console.log("Target group id:", targetGroupId);
 module.exports = { registerForm };
