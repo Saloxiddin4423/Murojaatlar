@@ -66,7 +66,9 @@ function signatureKeyboard() {
     [
       {
         text: menuButtons.openSignature,
-        web_app: { url: process.env.WEBAPP_URL } // 🔥 TO‘G‘RI FORMAT
+        web_app: {
+          url: process.env.WEBAPP_URL
+        }
       }
     ],
     [menuButtons.finishApplication],

@@ -6,141 +6,187 @@
   <title>Imzo qo‘yish</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     body {
       margin: 0;
-      padding: 16px;
       font-family: Arial, sans-serif;
-      background: #f5f5f5;
-    }
-    h2 {
-      margin: 0 0 12px;
-      font-size: 20px;
+      background: #f3f3f3;
+      padding: 20px;
       text-align: center;
     }
+
+    h1 {
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+
     .wrap {
-      max-width: 700px;
+      max-width: 420px;
       margin: 0 auto;
     }
-    canvas {
-      width: 100%;
-      height: 300px;
-      background: white;
+
+    .canvas-box {
+      background: #fff;
       border: 2px solid #ccc;
-      border-radius: 12px;
-      touch-action: none;
-      display: block;
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 14px;
     }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 340px;
+      background: #fff;
+      touch-action: none;
+    }
+
     .buttons {
       display: flex;
-      gap: 10px;
-      margin-top: 14px;
+      gap: 12px;
     }
+
     button {
       flex: 1;
       padding: 14px;
       border: none;
-      border-radius: 10px;
-      font-size: 16px;
+      border-radius: 12px;
+      font-size: 18px;
       cursor: pointer;
+      position: relative;
+      z-index: 5;
     }
-    .clear {
+
+    #clearBtn {
       background: #e5e5e5;
     }
-    .save {
-      background: #2ea6ff;
+
+    #saveBtn {
+      background: #2f95ec;
       color: white;
+      border: 2px solid #111;
     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h2>Imzo qo‘ying</h2>
-    <canvas id="signaturePad"></canvas>
+    <h1>Imzo qo‘ying</h1>
+
+    <div class="canvas-box">
+      <canvas id="signatureCanvas"></canvas>
+    </div>
+
     <div class="buttons">
-      <button class="clear" id="clearBtn">Tozalash</button>
-      <button class="save" id="saveBtn">Tasdiqlash</button>
+      <button type="button" id="clearBtn">Tozalash</button>
+      <button type="button" id="saveBtn">Tasdiqlash</button>
     </div>
   </div>
 
   <script>
     const tg = window.Telegram.WebApp;
+    tg.ready();
     tg.expand();
 
-    const canvas = document.getElementById("signaturePad");
+    const canvas = document.getElementById("signatureCanvas");
     const ctx = canvas.getContext("2d");
+    const clearBtn = document.getElementById("clearBtn");
+    const saveBtn = document.getElementById("saveBtn");
+
+    let drawing = false;
+    let hasSignature = false;
 
     function resizeCanvas() {
-      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const ratio = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
+
       canvas.width = rect.width * ratio;
       canvas.height = rect.height * ratio;
       ctx.scale(ratio, ratio);
+
       ctx.lineWidth = 2;
       ctx.lineCap = "round";
       ctx.strokeStyle = "#000";
     }
 
     resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
 
-    let drawing = false;
-    let hasDrawn = false;
-
-    function getPoint(e) {
+    function getPos(e) {
       const rect = canvas.getBoundingClientRect();
-      const touch = e.touches ? e.touches[0] : e;
+
+      if (e.touches && e.touches[0]) {
+        return {
+          x: e.touches[0].clientX - rect.left,
+          y: e.touches[0].clientY - rect.top,
+        };
+      }
+
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
       };
     }
 
     function startDraw(e) {
-      drawing = true;
-      const p = getPoint(e);
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
       e.preventDefault();
+      drawing = true;
+      hasSignature = true;
+
+      const pos = getPos(e);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
     }
 
     function draw(e) {
       if (!drawing) return;
-      const p = getPoint(e);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-      hasDrawn = true;
       e.preventDefault();
+
+      const pos = getPos(e);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
     }
 
-    function stopDraw() {
+    function endDraw(e) {
+      if (!drawing) return;
+      e.preventDefault();
       drawing = false;
     }
 
     canvas.addEventListener("mousedown", startDraw);
     canvas.addEventListener("mousemove", draw);
-    canvas.addEventListener("mouseup", stopDraw);
-    canvas.addEventListener("mouseleave", stopDraw);
+    canvas.addEventListener("mouseup", endDraw);
+    canvas.addEventListener("mouseleave", endDraw);
 
     canvas.addEventListener("touchstart", startDraw, { passive: false });
     canvas.addEventListener("touchmove", draw, { passive: false });
-    canvas.addEventListener("touchend", stopDraw);
+    canvas.addEventListener("touchend", endDraw, { passive: false });
 
-    document.getElementById("clearBtn").addEventListener("click", () => {
+    clearBtn.addEventListener("click", () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      hasDrawn = false;
+      hasSignature = false;
     });
 
-    document.getElementById("saveBtn").addEventListener("click", () => {
-      if (!hasDrawn) {
-        tg.showAlert("Avval imzo qo‘ying");
+    saveBtn.addEventListener("click", () => {
+      console.log("Tasdiqlash bosildi");
+
+      if (!hasSignature) {
+        alert("Avval imzo qo‘ying");
         return;
       }
 
-      const dataUrl = canvas.toDataURL("image/png");
-      tg.sendData(JSON.stringify({
-        type: "signature",
-        image: dataUrl
-      }));
+      const image = canvas.toDataURL("image/png");
+
+      tg.sendData(
+        JSON.stringify({
+          type: "signature",
+          image,
+        })
+      );
+
+      tg.close();
     });
   </script>
 </body>
