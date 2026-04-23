@@ -218,19 +218,32 @@ function registerApplication(bot) {
       return ctx.reply("Uchrashuv sanasini oddiy matn ko‘rinishida kiriting:");
     }
 
-    if (form.step === "meetingDate") {
-      form.meetingDate = text;
-      form.step = "passportPhotos";
+ if (form.step === "meetingDate") {
+  try {
+    console.log("MEETINGDATE BLOCKGA KIRDI");
 
-      if (!Array.isArray(form.passportPhotos)) {
-        form.passportPhotos = [];
-      }
+    form.meetingDate = text;
+    form.step = "passportPhotos";
 
-      return ctx.reply(
-        "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
-        finishPhotosKeyboard()
-      );
+    if (!Array.isArray(form.passportPhotos)) {
+      form.passportPhotos = [];
     }
+
+    console.log("STEP O'ZGARDI:", form.step);
+    console.log("PASSPORT PHOTOS INIT:", form.passportPhotos);
+
+    await ctx.reply(
+      "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
+      finishPhotosKeyboard()
+    );
+
+    console.log("PASSPORT XABARI YUBORILDI");
+    return;
+  } catch (error) {
+    console.error("MEETINGDATE XATOLIK:", error);
+    return ctx.reply("meetingDate bosqichida xatolik yuz berdi.");
+  }
+}
 
     if (form.step === "reviewReason") {
       form.reviewReason = text;
