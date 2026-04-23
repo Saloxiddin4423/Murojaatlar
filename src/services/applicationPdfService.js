@@ -10,7 +10,7 @@ async function generateApplicationPdf(form, bot) {
   const doc = new PDFDocument({ margin: 50 });
   doc.pipe(fs.createWriteStream(filePath));
 
-  // ===== SHAPKA (O‘NG TOMON) =====
+  doc.font("Helvetica");
   doc.fontSize(11);
 
   doc.text(
@@ -21,32 +21,26 @@ async function generateApplicationPdf(form, bot) {
   doc.moveDown(0.5);
 
   doc.text(`Ariza beruvchi: ${form.applicantFullName}`, {
-  align: "right",
-});
+    align: "right",
+  });
+  doc.text(`Tel: ${form.phone}`, { align: "right" });
+  doc.text(`Manzil: ${form.address}`, { align: "right" });
 
-doc.text(`Tel: ${form.phone}`, { align: "right" });
-doc.text(`Manzil: ${form.address}`, { align: "right" });
   doc.moveDown(2);
 
-  // ===== SARLAVHA =====
   doc.fontSize(16).text("ARIZA", { align: "center" });
 
   doc.moveDown(1.5);
-
+  doc.font("Helvetica");
   doc.fontSize(12);
 
-  // ===== ASOSIY MATN =====
   if (form.applicationType === "Sudlanuvchi bilan uchrashuvga ruxsat") {
     doc.text(
       `Men, ${form.applicantFullName}, ${form.defendantFullName} bilan uchrashish uchun ruxsat berishingizni so‘rayman.`
     );
-
     doc.moveDown(0.5);
-
     doc.text(`Sudlanuvchi menga: ${form.relationship}`);
-
     doc.moveDown(0.5);
-
     doc.text(`Uchrashuv sanasi: ${form.meetingDate}`);
   }
 
@@ -54,21 +48,15 @@ doc.text(`Manzil: ${form.address}`, { align: "right" });
     doc.text(
       `Men, ${form.applicantFullName}, ${form.defendantFullName} ga oid ish hujjatlari bilan tanishishga ruxsat berishingizni so‘rayman.`
     );
-
     doc.moveDown(0.5);
-
     doc.text(`Sudlanuvchi menga: ${form.relationship}`);
-
     doc.moveDown(0.5);
-
     doc.text(`Sabab: ${form.reviewReason}`);
   }
 
   doc.moveDown(2);
 
-  // ===== SЎRAYMAN =====
-  doc.font("Helvetica-Bold").text("SЎRAYMAN:", { align: "left" });
-
+  doc.font("Helvetica-Bold").text("SO‘RAYMAN:", { align: "left" });
   doc.font("Helvetica");
 
   if (form.applicationType === "Sudlanuvchi bilan uchrashuvga ruxsat") {
@@ -85,28 +73,45 @@ doc.text(`Manzil: ${form.address}`, { align: "right" });
 
   doc.moveDown(2);
 
-  // ===== SANA VA IMZO =====
-  doc.text(`Sana: ${new Date().toLocaleDateString()}`);
-  doc.text("Imzo: _____________________");
+  const dateY = doc.y;
+  doc.text(`Sana: ${new Date().toLocaleDateString()}`, 50, dateY);
+  doc.text("Imzo:", 50, dateY + 25);
 
-  // ===== PASPORT RASMLARI =====
-  for (let fileId of form.passportPhotos) {
-    const file = await bot.telegram.getFile(fileId);
-    const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
+  if (form.signature) {
+    try {
+      const base64Data = form.signature.replace(/^data:image\/png;base64,/, "");
+      const signatureBuffer = Buffer.from(base64Data, "base64");
 
-    const response = await axios.get(fileUrl, {
-      responseType: "arraybuffer",
-    });
+      doc.image(signatureBuffer, 95, dateY + 15, {
+        width: 120,
+        height: 45,
+      });
+    } catch (error) {
+      console.error("Imzoni PDFga joylashda xato:", error);
+      doc.text("_____________________", 95, dateY + 25);
+    }
+  } else {
+    doc.text("_____________________", 95, dateY + 25);
+  }
 
-    const imgBuffer = Buffer.from(response.data);
+  if (Array.isArray(form.passportPhotos)) {
+    for (const fileId of form.passportPhotos) {
+      const file = await bot.telegram.getFile(fileId);
+      const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
 
-    doc.addPage();
+      const response = await axios.get(fileUrl, {
+        responseType: "arraybuffer",
+      });
 
-    doc.image(imgBuffer, {
-      fit: [500, 700],
-      align: "center",
-      valign: "center",
-    });
+      const imgBuffer = Buffer.from(response.data);
+
+      doc.addPage();
+      doc.image(imgBuffer, {
+        fit: [500, 700],
+        align: "center",
+        valign: "center",
+      });
+    }
   }
 
   doc.end();
