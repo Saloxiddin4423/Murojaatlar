@@ -90,107 +90,115 @@
   </div>
 
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
 
-    const canvas = document.getElementById("signatureCanvas");
-    const ctx = canvas.getContext("2d");
-    const clearBtn = document.getElementById("clearBtn");
-    const saveBtn = document.getElementById("saveBtn");
+  const canvas = document.getElementById("signatureCanvas");
+  const ctx = canvas.getContext("2d");
+  const clearBtn = document.getElementById("clearBtn");
+  const saveBtn = document.getElementById("saveBtn");
 
-    let drawing = false;
-    let hasSignature = false;
+  let drawing = false;
+  let hasSignature = false;
 
-    function setupCanvas() {
-      const rect = canvas.getBoundingClientRect();
-      const ratio = window.devicePixelRatio || 1;
+  function setupCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
 
-      canvas.width = rect.width * ratio;
-      canvas.height = rect.height * ratio;
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
 
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(ratio, ratio);
-      ctx.lineWidth = 2;
-      ctx.lineCap = "round";
-      ctx.strokeStyle = "#000";
-    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#000";
+  }
 
-    setupCanvas();
+  setupCanvas();
 
-    function getPos(e) {
-      const rect = canvas.getBoundingClientRect();
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
 
-      if (e.touches && e.touches[0]) {
-        return {
-          x: e.touches[0].clientX - rect.left,
-          y: e.touches[0].clientY - rect.top
-        };
-      }
-
+    if (e.touches && e.touches[0]) {
       return {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
       };
     }
 
-    function startDraw(e) {
-      e.preventDefault();
-      drawing = true;
-      hasSignature = true;
-
-      const pos = getPos(e);
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    }
-
-    function draw(e) {
-      if (!drawing) return;
-      e.preventDefault();
-
-      const pos = getPos(e);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-    }
-
-    function endDraw(e) {
-      if (!drawing) return;
-      e.preventDefault();
-      drawing = false;
-    }
-
-    canvas.addEventListener("mousedown", startDraw);
-    canvas.addEventListener("mousemove", draw);
-    canvas.addEventListener("mouseup", endDraw);
-    canvas.addEventListener("mouseleave", endDraw);
-
-    canvas.addEventListener("touchstart", startDraw, { passive: false });
-    canvas.addEventListener("touchmove", draw, { passive: false });
-    canvas.addEventListener("touchend", endDraw, { passive: false });
-
-    clearBtn.onclick = function () {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      hasSignature = false;
-      alert("Tozalandi");
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
     };
+  }
 
-    saveBtn.onclick = function () {
-      alert("Tasdiqlash bosildi");
+  function startDraw(e) {
+    e.preventDefault();
+    drawing = true;
+    hasSignature = true;
 
-      if (!hasSignature) {
-        alert("Avval imzo qo‘ying");
-        return;
-      }
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }
 
-      const image = canvas.toDataURL("image/png");
+  function draw(e) {
+    if (!drawing) return;
+    e.preventDefault();
 
-      tg.sendData(JSON.stringify({
-        type: "signature",
-        image: image
-      }));
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }
 
-      tg.close();
-    };
-  </script>
+  function endDraw(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    drawing = false;
+  }
+
+  canvas.addEventListener("mousedown", startDraw);
+  canvas.addEventListener("mousemove", draw);
+  canvas.addEventListener("mouseup", endDraw);
+  canvas.addEventListener("mouseleave", endDraw);
+
+  canvas.addEventListener("touchstart", startDraw, { passive: false });
+  canvas.addEventListener("touchmove", draw, { passive: false });
+  canvas.addEventListener("touchend", endDraw, { passive: false });
+
+  clearBtn.onclick = function () {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasSignature = false;
+  };
+
+  saveBtn.onclick = function () {
+    if (!hasSignature) {
+      alert("Avval imzo qo‘ying");
+      return;
+    }
+
+    const image = canvas.toDataURL("image/png");
+
+    const payload = JSON.stringify({
+      type: "signature",
+      image: image
+    });
+
+    console.log("SENDDATA:", payload);
+
+    try {
+      tg.sendData(payload);
+
+      setTimeout(() => {
+        tg.close();
+      }, 500);
+    } catch (err) {
+      alert("Yuborishda xato");
+      console.error(err);
+    }
+  };
+</script>
 </body>
 </html>

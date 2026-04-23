@@ -87,32 +87,42 @@ function registerApplication(bot) {
     }
   });
 
-  bot.on("message", async (ctx, next) => {
-    const form = ctx.session.applicationForm;
+ bot.on("message", async (ctx, next) => {
+  const form = ctx.session.applicationForm;
 
-    if (!ctx.message.web_app_data) return next();
-    if (!form || form.step !== "signature") return next();
+  console.log("MESSAGE KELDI");
+  console.log("WEB_APP_DATA:", ctx.message.web_app_data);
+  console.log("SIGNATURE STEP:", form?.step);
 
-    try {
-      const data = JSON.parse(ctx.message.web_app_data.data);
+  if (!ctx.message.web_app_data) return next();
+  if (!form || form.step !== "signature") {
+    console.log("WEBAPP KELDI LEKIN STEP signature EMAS");
+    return next();
+  }
 
-      if (data.type === "signature" && data.image) {
-        form.signature = data.image;
+  try {
+    const rawData = ctx.message.web_app_data.data;
+    console.log("RAW WEBAPP DATA:", rawData);
 
-        console.log("IMZO SAQLANDI");
+    const data = JSON.parse(rawData);
 
-        return ctx.reply(
-          "Imzo saqlandi. Endi PDF tayyorlash tugmasini bosing.",
-          signatureKeyboard()
-        );
-      }
+    if (data.type === "signature" && data.image) {
+      form.signature = data.image;
 
-      return next();
-    } catch (error) {
-      console.error("WebApp data parse xato:", error);
-      return ctx.reply("Imzoni qabul qilishda xatolik yuz berdi.");
+      console.log("IMZO SAQLANDI");
+
+      return ctx.reply(
+        "Imzo saqlandi. Endi PDF tayyorlash tugmasini bosing.",
+        signatureKeyboard()
+      );
     }
-  });
+
+    return ctx.reply("Imzo ma'lumoti noto‘g‘ri keldi.");
+  } catch (error) {
+    console.error("WebApp data parse xato:", error);
+    return ctx.reply("Imzoni qabul qilishda xatolik yuz berdi.");
+  }
+});
 
   bot.on("text", async (ctx, next) => {
     const form = ctx.session.applicationForm;
