@@ -2,7 +2,7 @@ const {
   applicationCourtTypes,
   applicationTypes,
   districts,
-  menuButtons
+  menuButtons,
 } = require("../config/constants");
 
 const {
@@ -10,16 +10,16 @@ const {
   applicationTypesKeyboard,
   finishPhotosKeyboard,
   signatureKeyboard,
-  mainMenu
+  mainMenu,
 } = require("../keyboards/keyboards");
 
 const { resetApplicationForm } = require("../utils/helpers");
 const { generateApplicationPdf } = require("../services/applicationPdfService");
 
 function registerApplication(bot) {
-  bot.hears(applicationCourtTypes, async (ctx) => {
+  bot.hears(applicationCourtTypes, async (ctx, next) => {
     const form = ctx.session.applicationForm;
-    if (!form || form.step !== "courtType") return;
+    if (!form || form.step !== "courtType") return next();
 
     if (ctx.message.text !== "Jinoyat") {
       return ctx.reply("Hozircha faqat jinoyat ishlari bo‘yicha arizalar mavjud.");
@@ -34,9 +34,9 @@ function registerApplication(bot) {
     );
   });
 
-  bot.hears(districts, async (ctx) => {
+  bot.hears(districts, async (ctx, next) => {
     const form = ctx.session.applicationForm;
-    if (!form || form.step !== "district") return;
+    if (!form || form.step !== "district") return next();
 
     form.district = ctx.message.text;
     form.step = "applicationType";
@@ -44,9 +44,9 @@ function registerApplication(bot) {
     return ctx.reply("Ariza turini tanlang:", applicationTypesKeyboard());
   });
 
-  bot.hears(applicationTypes, async (ctx) => {
+  bot.hears(applicationTypes, async (ctx, next) => {
     const form = ctx.session.applicationForm;
-    if (!form || form.step !== "applicationType") return;
+    if (!form || form.step !== "applicationType") return next();
 
     form.applicationType = ctx.message.text;
     form.step = "applicantFullName";
@@ -54,58 +54,37 @@ function registerApplication(bot) {
     return ctx.reply("F.I.Sh kiriting:");
   });
 
-  bot.hears(menuButtons.finishPhotos, async (ctx) => {
-    const form = ctx.session.applicationForm;
-    if (!form || form.step !== "passportPhotos") return;
-
-    if (!form.passportPhotos.length) {
-      return ctx.reply("Avval kamida bitta pasport rasmini yuboring.");
-    }
-
-    form.step = "signature";
-
-    return ctx.reply(
-      "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
-      signatureKeyboard()
-    );
-  });
-
-  bot.hears(menuButtons.finishApplication, async (ctx) => {
-    const form = ctx.session.applicationForm;
-    if (!form || form.step !== "signature") return;
-
-    if (!form.signature) {
-      return ctx.reply("Avval imzo qo‘ying.");
-    }
-
-    try {
-      await ctx.reply("PDF tayyorlanmoqda... ⏳");
-
-      const filePath = await generateApplicationPdf(form, bot);
-
-      await ctx.replyWithDocument({ source: filePath });
-      await ctx.reply("Tayyor PDF yuborildi.", mainMenu());
-
-      resetApplicationForm(ctx);
-    } catch (err) {
-      console.error("PDF xatolik:", err);
-      await ctx.reply("PDF yaratishda xatolik yuz berdi.", mainMenu());
-    }
-  });
-
   bot.on("photo", async (ctx, next) => {
     const form = ctx.session.applicationForm;
+
     if (!form || form.step !== "passportPhotos") return next();
 
-    const photos = ctx.message.photo;
-    const largest = photos[photos.length - 1];
+    try {
+      const photos = ctx.message.photo;
 
-    form.passportPhotos.push(largest.file_id);
+      if (!photos || !photos.length) {
+        return ctx.reply("Rasmni qayta yuboring.");
+      }
 
-    return ctx.reply(
-      `Rasm qabul qilindi. Jami: ${form.passportPhotos.length} ta\nYana rasm yuboring yoki tugmani bosing.`,
-      finishPhotosKeyboard()
-    );
+      const largestPhoto = photos[photos.length - 1];
+
+      if (!Array.isArray(form.passportPhotos)) {
+        form.passportPhotos = [];
+      }
+
+      form.passportPhotos.push(largestPhoto.file_id);
+
+      console.log("PHOTO SAQLANDI:", largestPhoto.file_id);
+      console.log("JAMI RASMLAR:", form.passportPhotos.length);
+
+      return ctx.reply(
+        `Rasm qabul qilindi. Jami: ${form.passportPhotos.length} ta\nYana rasm yuboring yoki tugmani bosing.`,
+        finishPhotosKeyboard()
+      );
+    } catch (error) {
+      console.error("Photo qabul qilishda xato:", error);
+      return ctx.reply("Rasmni qabul qilishda xatolik yuz berdi.");
+    }
   });
 
   bot.on("message", async (ctx, next) => {
@@ -120,33 +99,81 @@ function registerApplication(bot) {
       if (data.type === "signature" && data.image) {
         form.signature = data.image;
 
+        console.log("IMZO SAQLANDI");
+
         return ctx.reply(
           "Imzo saqlandi. Endi PDF tayyorlash tugmasini bosing.",
           signatureKeyboard()
         );
       }
+
+      return next();
     } catch (error) {
       console.error("WebApp data parse xato:", error);
       return ctx.reply("Imzoni qabul qilishda xatolik yuz berdi.");
     }
-
-    return next();
   });
 
   bot.on("text", async (ctx, next) => {
     const form = ctx.session.applicationForm;
     const text = ctx.message.text;
 
+    console.log("TEXT KELDI:", text);
+    console.log("APPLICATION STEP:", form?.step);
+
+    if (!form || !form.step) return next();
+
+    if (text === menuButtons.finishPhotos) {
+      if (form.step !== "passportPhotos") {
+        return ctx.reply("Avval rasm yuborish bosqichiga keling.");
+      }
+
+      if (!Array.isArray(form.passportPhotos) || !form.passportPhotos.length) {
+        return ctx.reply("Avval kamida bitta pasport rasmini yuboring.");
+      }
+
+      form.step = "signature";
+
+      console.log("FINISH PHOTOS BOSILDI -> STEP signature");
+
+      return ctx.reply(
+        "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
+        signatureKeyboard()
+      );
+    }
+
+    if (text === menuButtons.finishApplication) {
+      if (form.step !== "signature") {
+        return ctx.reply("Avval imzo bosqichiga o‘ting.");
+      }
+
+      if (!form.signature) {
+        return ctx.reply("Avval imzo qo‘ying.");
+      }
+
+      try {
+        await ctx.reply("PDF tayyorlanmoqda... ⏳");
+
+        const filePath = await generateApplicationPdf(form, bot);
+
+        await ctx.replyWithDocument({ source: filePath });
+        await ctx.reply("Tayyor PDF yuborildi.", mainMenu());
+
+        resetApplicationForm(ctx);
+      } catch (err) {
+        console.error("PDF xatolik:", err);
+        await ctx.reply("PDF yaratishda xatolik yuz berdi.", mainMenu());
+      }
+
+      return;
+    }
+
     if (
-      !form ||
-      !form.step ||
       text === "/start" ||
       text === menuButtons.appeal ||
       text === menuButtons.application ||
       text === menuButtons.courtsInfo ||
       text === menuButtons.back ||
-      text === menuButtons.finishPhotos ||
-      text === menuButtons.finishApplication ||
       text === menuButtons.openSignature ||
       applicationCourtTypes.includes(text) ||
       applicationTypes.includes(text) ||
@@ -194,6 +221,11 @@ function registerApplication(bot) {
     if (form.step === "meetingDate") {
       form.meetingDate = text;
       form.step = "passportPhotos";
+
+      if (!Array.isArray(form.passportPhotos)) {
+        form.passportPhotos = [];
+      }
+
       return ctx.reply(
         "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
         finishPhotosKeyboard()
@@ -203,6 +235,11 @@ function registerApplication(bot) {
     if (form.step === "reviewReason") {
       form.reviewReason = text;
       form.step = "passportPhotos";
+
+      if (!Array.isArray(form.passportPhotos)) {
+        form.passportPhotos = [];
+      }
+
       return ctx.reply(
         "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
         finishPhotosKeyboard()
