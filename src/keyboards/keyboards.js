@@ -63,7 +63,12 @@ function finishPhotosKeyboard() {
 
 function signatureKeyboard() {
   return Markup.keyboard([
-    [Markup.button.webApp(menuButtons.openSignature, process.env.WEB_APP_URL)],
+    [
+      {
+        text: menuButtons.openSignature,
+        web_app: { url: process.env.WEBAPP_URL } // 🔥 TO‘G‘RI FORMAT
+      }
+    ],
     [menuButtons.finishApplication],
     [menuButtons.back]
   ]).resize();
