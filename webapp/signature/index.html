@@ -173,30 +173,41 @@
     hasSignature = false;
   };
 
-  saveBtn.onclick = function () {
+  saveBtn.onclick = async function () {
     if (!hasSignature) {
       alert("Avval imzo qo‘ying");
       return;
     }
 
-    const image = canvas.toDataURL("image/png");
-
-    const payload = JSON.stringify({
-      type: "signature",
-      image: image
-    });
-
-    console.log("SENDDATA:", payload);
-
     try {
-      tg.sendData(payload);
+      const image = canvas.toDataURL("image/png");
+
+      const response = await fetch("/api/signature", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ image })
+      });
+
+      const result = await response.json();
+
+      if (!result.success || !result.signatureId) {
+        alert("Imzoni saqlashda xato");
+        return;
+      }
+
+      tg.sendData(JSON.stringify({
+        type: "signature",
+        signatureId: result.signatureId
+      }));
 
       setTimeout(() => {
         tg.close();
       }, 500);
-    } catch (err) {
+    } catch (error) {
+      console.error("SEND ERROR:", error);
       alert("Yuborishda xato");
-      console.error(err);
     }
   };
 </script>

@@ -15,7 +15,7 @@ const {
 
 const { resetApplicationForm } = require("../utils/helpers");
 const { generateApplicationPdf } = require("../services/applicationPdfService");
-
+const { getSignature, removeSignature } = require("../services/signatureStore");
 function registerApplication(bot) {
   bot.hears(applicationCourtTypes, async (ctx, next) => {
     const form = ctx.session.applicationForm;
@@ -87,7 +87,7 @@ function registerApplication(bot) {
     }
   });
 
- bot.on("message", async (ctx, next) => {
+bot.on("message", async (ctx, next) => {
   const form = ctx.session.applicationForm;
 
   console.log("MESSAGE KELDI");
@@ -95,10 +95,7 @@ function registerApplication(bot) {
   console.log("SIGNATURE STEP:", form?.step);
 
   if (!ctx.message.web_app_data) return next();
-  if (!form || form.step !== "signature") {
-    console.log("WEBAPP KELDI LEKIN STEP signature EMAS");
-    return next();
-  }
+  if (!form || form.step !== "signature") return next();
 
   try {
     const rawData = ctx.message.web_app_data.data;
@@ -106,8 +103,15 @@ function registerApplication(bot) {
 
     const data = JSON.parse(rawData);
 
-    if (data.type === "signature" && data.image) {
-      form.signature = data.image;
+    if (data.type === "signature" && data.signatureId) {
+      const savedImage = getSignature(data.signatureId);
+
+      if (!savedImage) {
+        return ctx.reply("Imzo topilmadi yoki muddati o‘tgan.");
+      }
+
+      form.signature = savedImage;
+      removeSignature(data.signatureId);
 
       console.log("IMZO SAQLANDI");
 
@@ -123,7 +127,6 @@ function registerApplication(bot) {
     return ctx.reply("Imzoni qabul qilishda xatolik yuz berdi.");
   }
 });
-
   bot.on("text", async (ctx, next) => {
     const form = ctx.session.applicationForm;
     const text = ctx.message.text;
