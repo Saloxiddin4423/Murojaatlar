@@ -123,160 +123,169 @@ function registerApplication(bot) {
   });
 
   bot.on("text", async (ctx, next) => {
-    const form = ctx.session.applicationForm;
-    const text = ctx.message.text;
+  const form = ctx.session.applicationForm;
+  const text = ctx.message.text;
 
-    const hasCyrillic = /[А-Яа-яЁёҚқҒғҲҳЎў]/.test(text);
+  const hasCyrillic = /[А-Яа-яЁёҚқҒғҲҳЎў]/.test(text);
 
-    const allowedButtons = [
-      "/start",
-      menuButtons.appeal,
-      menuButtons.application,
-      menuButtons.courtsInfo,
-      menuButtons.back,
-      menuButtons.finishPhotos,
-      menuButtons.finishApplication,
-      menuButtons.openSignature,
-      ...applicationCourtTypes,
-      ...applicationTypes,
-      ...districts,
-    ];
+  const allowedButtons = [
+    "/start",
+    menuButtons.appeal,
+    menuButtons.application,
+    menuButtons.courtsInfo,
+    menuButtons.back,
+    menuButtons.finishPhotos,
+    menuButtons.finishApplication,
+    menuButtons.openSignature,
+    ...applicationCourtTypes,
+    ...applicationTypes,
+    ...districts,
+  ];
 
-    if (hasCyrillic && !allowedButtons.includes(text)) {
-      return ctx.reply(
-        "Iltimos, ma’lumotlarni lotin harflarida kiriting.\n\nMasalan: Saloxiddin Turgunov"
-      );
-    }
-
-    if (!form || !form.step) return next();
-
-    if (text === menuButtons.finishPhotos) {
-      if (form.step !== "passportPhotos") {
-        return ctx.reply("Avval rasm yuborish bosqichiga keling.");
-      }
-
-      if (!Array.isArray(form.passportPhotos) || !form.passportPhotos.length) {
-        return ctx.reply("Avval kamida bitta pasport rasmini yuboring.");
-      }
-
-      form.step = "signature";
-
-      return ctx.reply(
-        "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
-        signatureKeyboard()
-      );
-    }
-
-    if (form.signature && form.signature.startsWith("data:image")) {
-  try {
-    const base64Data = form.signature.split(",")[1];
-    const signatureBuffer = Buffer.from(base64Data, "base64");
-
-    doc.image(signatureBuffer, 95, dateY + 15, {
-      width: 120,
-      height: 45,
-    });
-  } catch (error) {
-    console.error("Imzo xato:", error);
-    doc.text("_____________________", 95, dateY + 25);
+  if (hasCyrillic && !allowedButtons.includes(text)) {
+    return ctx.reply(
+      "Iltimos, ma’lumotlarni lotin harflarida kiriting.\n\nMasalan: Saloxiddin Turgunov"
+    );
   }
-} else if (form.signature === "test-signature") {
-  doc.fontSize(10).text("TEST MODE", 95, dateY + 25);
-} else {
-  doc.text("_____________________", 95, dateY + 25);
-}
 
-    if (
-      text === "/start" ||
-      text === menuButtons.appeal ||
-      text === menuButtons.application ||
-      text === menuButtons.courtsInfo ||
-      text === menuButtons.back ||
-      text === menuButtons.openSignature ||
-      applicationCourtTypes.includes(text) ||
-      applicationTypes.includes(text) ||
-      districts.includes(text)
-    ) {
-      return next();
+  if (!form || !form.step) return next();
+
+  if (text === menuButtons.finishPhotos) {
+    if (form.step !== "passportPhotos") {
+      return ctx.reply("Avval rasm yuborish bosqichiga keling.");
     }
 
-    if (form.step === "applicantFullName") {
-      form.applicantFullName = text;
-      form.step = "phone";
-      return ctx.reply("Telefon raqamingizni kiriting:");
+    if (!Array.isArray(form.passportPhotos) || !form.passportPhotos.length) {
+      return ctx.reply("Avval kamida bitta pasport rasmini yuboring.");
     }
 
-    if (form.step === "phone") {
-      form.phone = text;
-      form.step = "address";
-      return ctx.reply("Manzilingizni kiriting:");
+    form.step = "signature";
+
+    return ctx.reply(
+      "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
+      signatureKeyboard()
+    );
+  }
+
+  if (text === menuButtons.finishApplication) {
+    if (form.step !== "signature") {
+      return ctx.reply("Avval imzo bosqichiga o‘ting.");
     }
 
-    if (form.step === "address") {
-      form.address = text;
-      form.step = "defendantFullName";
-      return ctx.reply("Sudlanuvchining F.I.Sh ni kiriting:");
+    if (!form.signature) {
+      form.signature = "test-signature";
     }
 
-    if (form.step === "defendantFullName") {
-      form.defendantFullName = text;
-      form.step = "visitorsCount";
-      return ctx.reply("Uchrashuvga nechta odam kiradi? Faqat 1 dan 3 gacha son kiriting:");
+    try {
+      await ctx.reply("PDF tayyorlanmoqda... ⏳");
+
+      const filePath = await generateApplicationPdf(form, bot);
+
+      await ctx.replyWithDocument({ source: filePath });
+      await ctx.reply("Tayyor PDF yuborildi.", mainMenu());
+
+      resetApplicationForm(ctx);
+    } catch (err) {
+      console.error("PDF xatolik:", err);
+      await ctx.reply("PDF yaratishda xatolik yuz berdi.", mainMenu());
     }
 
-    if (form.step === "visitorsCount") {
-      const count = Number(text);
+    return;
+  }
 
-      if (!Number.isInteger(count) || count < 1 || count > 3) {
-        return ctx.reply("Noto‘g‘ri son. Faqat 1, 2 yoki 3 kiriting.");
-      }
-
-      form.visitorsCount = count;
-      form.visitors = [];
-      form.step = "visitorName";
-
-      return ctx.reply("1-odamning F.I.Sh ni kiriting:");
-    }
-
-    if (form.step === "visitorName") {
-      form.visitors.push({
-        name: text,
-        relation: "",
-      });
-
-      form.step = "visitorRelation";
-      return ctx.reply("Bu shaxs sudlanuvchiga kim bo‘ladi?");
-    }
-
-    if (form.step === "visitorRelation") {
-      const currentIndex = form.visitors.length - 1;
-      form.visitors[currentIndex].relation = text;
-
-      if (form.visitors.length < form.visitorsCount) {
-        form.step = "visitorName";
-        return ctx.reply(`${form.visitors.length + 1}-odamning F.I.Sh ni kiriting:`);
-      }
-
-      form.step = "meetingDate";
-      return ctx.reply("Uchrashuv sanasini kiriting:");
-    }
-
-    if (form.step === "meetingDate") {
-      form.meetingDate = text;
-      form.step = "passportPhotos";
-
-      if (!Array.isArray(form.passportPhotos)) {
-        form.passportPhotos = [];
-      }
-
-      return ctx.reply(
-        "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
-        finishPhotosKeyboard()
-      );
-    }
-
+  if (
+    text === "/start" ||
+    text === menuButtons.appeal ||
+    text === menuButtons.application ||
+    text === menuButtons.courtsInfo ||
+    text === menuButtons.back ||
+    text === menuButtons.openSignature ||
+    applicationCourtTypes.includes(text) ||
+    applicationTypes.includes(text) ||
+    districts.includes(text)
+  ) {
     return next();
-  });
+  }
+
+  if (form.step === "applicantFullName") {
+    form.applicantFullName = text;
+    form.step = "phone";
+    return ctx.reply("Telefon raqamingizni kiriting:");
+  }
+
+  if (form.step === "phone") {
+    form.phone = text;
+    form.step = "address";
+    return ctx.reply("Manzilingizni kiriting:");
+  }
+
+  if (form.step === "address") {
+    form.address = text;
+    form.step = "defendantFullName";
+    return ctx.reply("Sudlanuvchining F.I.Sh ni kiriting:");
+  }
+
+  if (form.step === "defendantFullName") {
+    form.defendantFullName = text;
+    form.step = "visitorsCount";
+    return ctx.reply(
+      "Uchrashuvga nechta odam kiradi? Faqat 1 dan 3 gacha son kiriting:"
+    );
+  }
+
+  if (form.step === "visitorsCount") {
+    const count = Number(text);
+
+    if (!Number.isInteger(count) || count < 1 || count > 3) {
+      return ctx.reply("Noto‘g‘ri son. Faqat 1, 2 yoki 3 kiriting.");
+    }
+
+    form.visitorsCount = count;
+    form.visitors = [];
+    form.step = "visitorName";
+
+    return ctx.reply("1-odamning F.I.Sh ni kiriting:");
+  }
+
+  if (form.step === "visitorName") {
+    form.visitors.push({
+      name: text,
+      relation: "",
+    });
+
+    form.step = "visitorRelation";
+    return ctx.reply("Bu shaxs sudlanuvchiga kim bo‘ladi?");
+  }
+
+  if (form.step === "visitorRelation") {
+    const currentIndex = form.visitors.length - 1;
+    form.visitors[currentIndex].relation = text;
+
+    if (form.visitors.length < form.visitorsCount) {
+      form.step = "visitorName";
+      return ctx.reply(`${form.visitors.length + 1}-odamning F.I.Sh ni kiriting:`);
+    }
+
+    form.step = "meetingDate";
+    return ctx.reply("Uchrashuv sanasini kiriting:");
+  }
+
+  if (form.step === "meetingDate") {
+    form.meetingDate = text;
+    form.step = "passportPhotos";
+
+    if (!Array.isArray(form.passportPhotos)) {
+      form.passportPhotos = [];
+    }
+
+    return ctx.reply(
+      "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
+      finishPhotosKeyboard()
+    );
+  }
+
+  return next();
+});
 }
 
 module.exports = { registerApplication };
