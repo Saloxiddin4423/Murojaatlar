@@ -16,6 +16,7 @@ const {
 const { resetApplicationForm } = require("../utils/helpers");
 const { generateApplicationPdf } = require("../services/applicationPdfService");
 const { getSignature, removeSignature } = require("../services/signatureStore");
+
 function registerApplication(bot) {
   bot.hears(applicationCourtTypes, async (ctx, next) => {
     const form = ctx.session.applicationForm;
@@ -48,10 +49,14 @@ function registerApplication(bot) {
     const form = ctx.session.applicationForm;
     if (!form || form.step !== "applicationType") return next();
 
+    if (ctx.message.text === "Ish hujjatlari bilan tanishish") {
+      return ctx.reply("Bu ariza turi hozircha vaqtincha to‘xtatildi.");
+    }
+
     form.applicationType = ctx.message.text;
     form.step = "applicantFullName";
 
-    return ctx.reply("F.I.Sh kiriting:");
+    return ctx.reply("Ariza beruvchining F.I.Sh ni kiriting:");
   });
 
   bot.on("photo", async (ctx, next) => {
@@ -74,9 +79,6 @@ function registerApplication(bot) {
 
       form.passportPhotos.push(largestPhoto.file_id);
 
-      console.log("PHOTO SAQLANDI:", largestPhoto.file_id);
-      console.log("JAMI RASMLAR:", form.passportPhotos.length);
-
       return ctx.reply(
         `Rasm qabul qilindi. Jami: ${form.passportPhotos.length} ta\nYana rasm yuboring yoki tugmani bosing.`,
         finishPhotosKeyboard()
@@ -87,52 +89,64 @@ function registerApplication(bot) {
     }
   });
 
-bot.on("message", async (ctx, next) => {
-  const form = ctx.session.applicationForm;
+  bot.on("message", async (ctx, next) => {
+    const form = ctx.session.applicationForm;
 
-  console.log("MESSAGE KELDI");
-  console.log("WEB_APP_DATA:", ctx.message.web_app_data);
-  console.log("SIGNATURE STEP:", form?.step);
+    if (!ctx.message.web_app_data) return next();
+    if (!form || form.step !== "signature") return next();
 
-  if (!ctx.message.web_app_data) return next();
-  if (!form || form.step !== "signature") return next();
+    try {
+      const rawData = ctx.message.web_app_data.data;
+      const data = JSON.parse(rawData);
 
-  try {
-    const rawData = ctx.message.web_app_data.data;
-    console.log("RAW WEBAPP DATA:", rawData);
+      if (data.type === "signature" && data.signatureId) {
+        const savedImage = getSignature(data.signatureId);
 
-    const data = JSON.parse(rawData);
+        if (!savedImage) {
+          return ctx.reply("Imzo topilmadi yoki muddati o‘tgan.");
+        }
 
-    if (data.type === "signature" && data.signatureId) {
-      const savedImage = getSignature(data.signatureId);
+        form.signature = savedImage;
+        removeSignature(data.signatureId);
 
-      if (!savedImage) {
-        return ctx.reply("Imzo topilmadi yoki muddati o‘tgan.");
+        return ctx.reply(
+          "Imzo saqlandi. Endi PDF tayyorlash tugmasini bosing.",
+          signatureKeyboard()
+        );
       }
 
-      form.signature = savedImage;
-      removeSignature(data.signatureId);
-
-      console.log("IMZO SAQLANDI");
-
-      return ctx.reply(
-        "Imzo saqlandi. Endi PDF tayyorlash tugmasini bosing.",
-        signatureKeyboard()
-      );
+      return ctx.reply("Imzo ma'lumoti noto‘g‘ri keldi.");
+    } catch (error) {
+      console.error("WebApp data parse xato:", error);
+      return ctx.reply("Imzoni qabul qilishda xatolik yuz berdi.");
     }
+  });
 
-    return ctx.reply("Imzo ma'lumoti noto‘g‘ri keldi.");
-  } catch (error) {
-    console.error("WebApp data parse xato:", error);
-    return ctx.reply("Imzoni qabul qilishda xatolik yuz berdi.");
-  }
-});
   bot.on("text", async (ctx, next) => {
     const form = ctx.session.applicationForm;
     const text = ctx.message.text;
 
-    console.log("TEXT KELDI:", text);
-    console.log("APPLICATION STEP:", form?.step);
+    const hasCyrillic = /[А-Яа-яЁёҚқҒғҲҳЎў]/.test(text);
+
+    const allowedButtons = [
+      "/start",
+      menuButtons.appeal,
+      menuButtons.application,
+      menuButtons.courtsInfo,
+      menuButtons.back,
+      menuButtons.finishPhotos,
+      menuButtons.finishApplication,
+      menuButtons.openSignature,
+      ...applicationCourtTypes,
+      ...applicationTypes,
+      ...districts,
+    ];
+
+    if (hasCyrillic && !allowedButtons.includes(text)) {
+      return ctx.reply(
+        "Iltimos, ma’lumotlarni lotin harflarida kiriting.\n\nMasalan: Saloxiddin Turgunov"
+      );
+    }
 
     if (!form || !form.step) return next();
 
@@ -147,39 +161,30 @@ bot.on("message", async (ctx, next) => {
 
       form.step = "signature";
 
-      console.log("FINISH PHOTOS BOSILDI -> STEP signature");
-
       return ctx.reply(
         "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
         signatureKeyboard()
       );
     }
 
-    if (text === menuButtons.finishApplication) {
-      if (form.step !== "signature") {
-        return ctx.reply("Avval imzo bosqichiga o‘ting.");
-      }
+    if (form.signature && form.signature.startsWith("data:image")) {
+  try {
+    const base64Data = form.signature.split(",")[1];
+    const signatureBuffer = Buffer.from(base64Data, "base64");
 
-      if (!form.signature) {
-        return ctx.reply("Avval imzo qo‘ying.");
-      }
-
-      try {
-        await ctx.reply("PDF tayyorlanmoqda... ⏳");
-
-        const filePath = await generateApplicationPdf(form, bot);
-
-        await ctx.replyWithDocument({ source: filePath });
-        await ctx.reply("Tayyor PDF yuborildi.", mainMenu());
-
-        resetApplicationForm(ctx);
-      } catch (err) {
-        console.error("PDF xatolik:", err);
-        await ctx.reply("PDF yaratishda xatolik yuz berdi.", mainMenu());
-      }
-
-      return;
-    }
+    doc.image(signatureBuffer, 95, dateY + 15, {
+      width: 120,
+      height: 45,
+    });
+  } catch (error) {
+    console.error("Imzo xato:", error);
+    doc.text("_____________________", 95, dateY + 25);
+  }
+} else if (form.signature === "test-signature") {
+  doc.fontSize(10).text("TEST MODE", 95, dateY + 25);
+} else {
+  doc.text("_____________________", 95, dateY + 25);
+}
 
     if (
       text === "/start" ||
@@ -215,51 +220,49 @@ bot.on("message", async (ctx, next) => {
 
     if (form.step === "defendantFullName") {
       form.defendantFullName = text;
-      form.step = "relationship";
-      return ctx.reply("Sudlanuvchi sizga kim bo‘ladi?");
+      form.step = "visitorsCount";
+      return ctx.reply("Uchrashuvga nechta odam kiradi? Faqat 1 dan 3 gacha son kiriting:");
     }
 
-    if (form.step === "relationship") {
-      form.relationship = text;
+    if (form.step === "visitorsCount") {
+      const count = Number(text);
 
-      if (form.applicationType === "Ish hujjatlari bilan tanishish") {
-        form.step = "reviewReason";
-        return ctx.reply("Ish hujjatlari bilan tanishish sababini yozing:");
+      if (!Number.isInteger(count) || count < 1 || count > 3) {
+        return ctx.reply("Noto‘g‘ri son. Faqat 1, 2 yoki 3 kiriting.");
+      }
+
+      form.visitorsCount = count;
+      form.visitors = [];
+      form.step = "visitorName";
+
+      return ctx.reply("1-odamning F.I.Sh ni kiriting:");
+    }
+
+    if (form.step === "visitorName") {
+      form.visitors.push({
+        name: text,
+        relation: "",
+      });
+
+      form.step = "visitorRelation";
+      return ctx.reply("Bu shaxs sudlanuvchiga kim bo‘ladi?");
+    }
+
+    if (form.step === "visitorRelation") {
+      const currentIndex = form.visitors.length - 1;
+      form.visitors[currentIndex].relation = text;
+
+      if (form.visitors.length < form.visitorsCount) {
+        form.step = "visitorName";
+        return ctx.reply(`${form.visitors.length + 1}-odamning F.I.Sh ni kiriting:`);
       }
 
       form.step = "meetingDate";
-      return ctx.reply("Uchrashuv sanasini oddiy matn ko‘rinishida kiriting:");
+      return ctx.reply("Uchrashuv sanasini kiriting:");
     }
 
- if (form.step === "meetingDate") {
-  try {
-    console.log("MEETINGDATE BLOCKGA KIRDI");
-
-    form.meetingDate = text;
-    form.step = "passportPhotos";
-
-    if (!Array.isArray(form.passportPhotos)) {
-      form.passportPhotos = [];
-    }
-
-    console.log("STEP O'ZGARDI:", form.step);
-    console.log("PASSPORT PHOTOS INIT:", form.passportPhotos);
-
-    await ctx.reply(
-      "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
-      finishPhotosKeyboard()
-    );
-
-    console.log("PASSPORT XABARI YUBORILDI");
-    return;
-  } catch (error) {
-    console.error("MEETINGDATE XATOLIK:", error);
-    return ctx.reply("meetingDate bosqichida xatolik yuz berdi.");
-  }
-}
-
-    if (form.step === "reviewReason") {
-      form.reviewReason = text;
+    if (form.step === "meetingDate") {
+      form.meetingDate = text;
       form.step = "passportPhotos";
 
       if (!Array.isArray(form.passportPhotos)) {

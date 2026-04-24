@@ -67,7 +67,7 @@ function signatureKeyboard() {
       {
         text: menuButtons.openSignature,
         web_app: {
-          url: process.env.WEBAPP_URL
+          url: process.env.WEB_APP_URL
         }
       }
     ],
@@ -75,7 +75,6 @@ function signatureKeyboard() {
     [menuButtons.back]
   ]).resize();
 }
-
 module.exports = {
   mainMenu,
   courtKeyboard,
