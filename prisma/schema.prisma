@@ -31,3 +31,8 @@ model Appeal {
 
   user User @relation(fields: [userId], references: [id])
 }
+model Admin {
+  id         Int      @id @default(autoincrement())
+  telegramId String   @unique
+  createdAt DateTime @default(now())
+}

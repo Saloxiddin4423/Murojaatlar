@@ -7,13 +7,14 @@ const { registerNavigation } = require("./handlers/navigationHandler");
 const { registerForm } = require("./handlers/formHandler");
 const { registerApplication } = require("./handlers/applicationHandler");
 const { saveSignature } = require("./services/signatureStore");
-
+const { adminHandler } = require("./handlers/adminHandler");
 const app = express();
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/webapp", express.static(path.join(__dirname, "../webapp")));
+adminHandler(bot);
 
 registerStart(bot);
 registerNavigation(bot);

@@ -1,4 +1,4 @@
-const courtTypes = ["Jinoyat", "Iqtisodiy", "Fuqarolik", "Ma'muriy"];
+const courtTypes = ["Jinoyat", "Iqtisodiy", "Fuqarolik"];
 
 const districts = [
   "Bektemir",
@@ -25,7 +25,7 @@ const menuButtons = {
   finishApplication: "📄 PDF tayyorlash"
 };
 
-const applicationCourtTypes = ["Jinoyat", "Ma'muriy", "Iqtisodiy", "Fuqarolik"];
+const applicationCourtTypes = ["Jinoyat", "Iqtisodiy", "Fuqarolik"];
 
 const applicationTypes = [
   "Sudlanuvchi bilan uchrashuvga ruxsat",

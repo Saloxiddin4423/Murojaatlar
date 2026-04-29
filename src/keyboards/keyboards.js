@@ -15,7 +15,7 @@ function mainMenu() {
 function courtKeyboard() {
   return Markup.keyboard([
     ["Jinoyat", "Iqtisodiy"],
-    ["Fuqarolik", "Ma'muriy"],
+    ["Fuqarolik"],
     [menuButtons.back]
   ]).resize();
 }
@@ -31,7 +31,7 @@ function districtKeyboard() {
 
 function applicationCourtKeyboard() {
   return Markup.keyboard([
-    ["Jinoyat", "Ma'muriy"],
+    ["Jinoyat"],
     ["Iqtisodiy", "Fuqarolik"],
     [menuButtons.back]
   ]).resize();
