@@ -1,41 +1,39 @@
 const {
   applicationCourtTypes,
   applicationTypes,
-  districts,
+  courtsByType,
   menuButtons,
 } = require("../config/constants");
 
 const {
-  criminalDistrictKeyboard,
+  districtKeyboard,
   applicationTypesKeyboard,
   finishPhotosKeyboard,
   signatureKeyboard,
   mainMenu,
 } = require("../keyboards/keyboards");
 
+const { getApplicationByTitle } = require("../applications/registry");
 const { resetApplicationForm } = require("../utils/helpers");
 const { generateApplicationPdf } = require("../services/applicationPdfService");
 const { getSignature, removeSignature } = require("../services/signatureStore");
+const { generateApplication } = require("../services/aiService");
 
+const allCourts = Object.values(courtsByType).flat();
 function registerApplication(bot) {
   bot.hears(applicationCourtTypes, async (ctx, next) => {
     const form = ctx.session.applicationForm;
     if (!form || form.step !== "courtType") return next();
 
-    if (ctx.message.text !== "Jinoyat") {
-      return ctx.reply("Hozircha faqat jinoyat ishlari bo‘yicha arizalar mavjud.");
-    }
+    const courtType = ctx.message.text;
 
-    form.courtType = ctx.message.text;
+    form.courtType = courtType;
     form.step = "district";
 
-    return ctx.reply(
-      "Jinoyat ishlari bo‘yicha tuman sudini tanlang:",
-      criminalDistrictKeyboard()
-    );
+    return ctx.reply("Sudni tanlang:", districtKeyboard(courtType));
   });
 
-  bot.hears(districts, async (ctx, next) => {
+  bot.hears(allCourts, async (ctx, next) => {
     const form = ctx.session.applicationForm;
     if (!form || form.step !== "district") return next();
 
@@ -49,14 +47,35 @@ function registerApplication(bot) {
     const form = ctx.session.applicationForm;
     if (!form || form.step !== "applicationType") return next();
 
-    if (ctx.message.text === "Ish hujjatlari bilan tanishish") {
-      return ctx.reply("Bu ariza turi hozircha vaqtincha to‘xtatildi.");
+    const text = ctx.message.text;
+    const selectedApplication = getApplicationByTitle(text);
+
+    if (!selectedApplication) {
+      return ctx.reply("Bunday ariza turi topilmadi.");
     }
 
-    form.applicationType = ctx.message.text;
-    form.step = "applicantFullName";
+    form.applicationType = selectedApplication.title;
+    form.applicationId = selectedApplication.id;
 
-    return ctx.reply("Ariza beruvchining F.I.Sh ni kiriting:");
+    if (selectedApplication.id === "aiApplication") {
+      form.step = "aiText";
+
+      return ctx.reply(
+        "Ariza mazmunini oddiy qilib yozing.\n\nMasalan:\nQo‘shnim meni haqorat qildi, shunga ariza yozmoqchiman."
+      );
+    }
+
+    if (selectedApplication.id === "documentCopyRequest") {
+      form.step = "copyApplicantFullName";
+      return ctx.reply("Ariza beruvchining F.I.Sh ni kiriting:");
+    }
+
+    if (selectedApplication.id === "meetingPermission") {
+      form.step = "applicantFullName";
+      return ctx.reply("Ariza beruvchining F.I.Sh ni kiriting:");
+    }
+
+    return ctx.reply("Bu ariza turi hali sozlanmagan.");
   });
 
   bot.on("photo", async (ctx, next) => {
@@ -123,169 +142,234 @@ function registerApplication(bot) {
   });
 
   bot.on("text", async (ctx, next) => {
-  const form = ctx.session.applicationForm;
-  const text = ctx.message.text;
+    const form = ctx.session.applicationForm;
+    const text = ctx.message.text;
 
-  const hasCyrillic = /[А-Яа-яЁёҚқҒғҲҳЎў]/.test(text);
+    const hasCyrillic = /[А-Яа-яЁёҚқҒғҲҳЎў]/.test(text);
 
-  const allowedButtons = [
-    "/start",
-    menuButtons.appeal,
-    menuButtons.application,
-    menuButtons.courtsInfo,
-    menuButtons.back,
-    menuButtons.finishPhotos,
-    menuButtons.finishApplication,
-    menuButtons.openSignature,
-    ...applicationCourtTypes,
-    ...applicationTypes,
-    ...districts,
-  ];
+    const allowedButtons = [
+      "/start",
+      menuButtons.appeal,
+      menuButtons.application,
+      menuButtons.courtsInfo,
+      menuButtons.back,
+      menuButtons.finishPhotos,
+      menuButtons.finishApplication,
+      menuButtons.openSignature,
+      ...applicationCourtTypes,
+      ...applicationTypes,
+      ...allCourts,
+    ];
 
-  if (hasCyrillic && !allowedButtons.includes(text)) {
-    return ctx.reply(
-      "Iltimos, ma’lumotlarni lotin harflarida kiriting.\n\nMasalan: Saloxiddin Turgunov"
-    );
-  }
-
-  if (!form || !form.step) return next();
-
-  if (text === menuButtons.finishPhotos) {
-    if (form.step !== "passportPhotos") {
-      return ctx.reply("Avval rasm yuborish bosqichiga keling.");
+    if (hasCyrillic && !allowedButtons.includes(text)) {
+      return ctx.reply(
+        "Iltimos, ma’lumotlarni lotin harflarida kiriting.\n\nMasalan: Saloxiddin Turgunov"
+      );
     }
 
-    if (!Array.isArray(form.passportPhotos) || !form.passportPhotos.length) {
-      return ctx.reply("Avval kamida bitta pasport rasmini yuboring.");
+    if (!form || !form.step) return next();
+
+    if (form.step === "aiText") {
+      try {
+        await ctx.reply("⏳ AI arizangizni tayyorlayapti...");
+
+        const result = await generateApplication(text);
+
+        form.aiGeneratedText = result;
+        form.step = null;
+
+        await ctx.reply(result, mainMenu());
+        resetApplicationForm(ctx);
+        return;
+      } catch (error) {
+        console.error("AI ERROR:", error);
+        await ctx.reply("❌ AI orqali ariza tayyorlashda xatolik yuz berdi.");
+        return;
+      }
     }
 
-    form.step = "signature";
-
-    return ctx.reply(
-      "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
-      signatureKeyboard()
-    );
-  }
-
-  if (text === menuButtons.finishApplication) {
-    if (form.step !== "signature") {
-      return ctx.reply("Avval imzo bosqichiga o‘ting.");
+    if (form.step === "copyApplicantFullName") {
+      form.applicantFullName = text;
+      form.step = "copyPhone";
+      return ctx.reply("Telefon raqamingizni kiriting:");
     }
 
-    if (!form.signature) {
-      form.signature = "test-signature";
+    if (form.step === "copyPhone") {
+      form.phone = text;
+      form.step = "copyAddress";
+      return ctx.reply("Manzilingizni kiriting:");
     }
 
-    try {
-      await ctx.reply("PDF tayyorlanmoqda... ⏳");
-
-      const filePath = await generateApplicationPdf(form, bot);
-
-      await ctx.replyWithDocument({ source: filePath });
-      await ctx.reply("Tayyor PDF yuborildi.", mainMenu());
-
-      resetApplicationForm(ctx);
-    } catch (err) {
-      console.error("PDF xatolik:", err);
-      await ctx.reply("PDF yaratishda xatolik yuz berdi.", mainMenu());
+    if (form.step === "copyAddress") {
+      form.address = text;
+      form.step = "copyCaseNumber";
+      return ctx.reply("Ish raqamini kiriting:");
     }
 
-    return;
-  }
-
-  if (
-    text === "/start" ||
-    text === menuButtons.appeal ||
-    text === menuButtons.application ||
-    text === menuButtons.courtsInfo ||
-    text === menuButtons.back ||
-    text === menuButtons.openSignature ||
-    applicationCourtTypes.includes(text) ||
-    applicationTypes.includes(text) ||
-    districts.includes(text)
-  ) {
-    return next();
-  }
-
-  if (form.step === "applicantFullName") {
-    form.applicantFullName = text;
-    form.step = "phone";
-    return ctx.reply("Telefon raqamingizni kiriting:");
-  }
-
-  if (form.step === "phone") {
-    form.phone = text;
-    form.step = "address";
-    return ctx.reply("Manzilingizni kiriting:");
-  }
-
-  if (form.step === "address") {
-    form.address = text;
-    form.step = "defendantFullName";
-    return ctx.reply("Sudlanuvchining F.I.Sh ni kiriting:");
-  }
-
-  if (form.step === "defendantFullName") {
-    form.defendantFullName = text;
-    form.step = "visitorsCount";
-    return ctx.reply(
-      "Uchrashuvga nechta odam kiradi? Faqat 1 dan 3 gacha son kiriting:"
-    );
-  }
-
-  if (form.step === "visitorsCount") {
-    const count = Number(text);
-
-    if (!Number.isInteger(count) || count < 1 || count > 3) {
-      return ctx.reply("Noto‘g‘ri son. Faqat 1, 2 yoki 3 kiriting.");
+    if (form.step === "copyCaseNumber") {
+      form.caseNumber = text;
+      form.step = "copyRequestedDocs";
+      return ctx.reply(
+        "Qaysi ish hujjatlaridan nusxa olmoqchisiz?\n\nMasalan:\nSud majlisi bayonnomasi, hukm nusxasi, qaror nusxasi"
+      );
     }
 
-    form.visitorsCount = count;
-    form.visitors = [];
-    form.step = "visitorName";
+    if (form.step === "copyRequestedDocs") {
+      form.requestedDocs = text;
+      form.step = "copyReason";
+      return ctx.reply(
+        "Nusxa olish sababini kiriting:\n\nMasalan:\nShikoyat berish uchun, advokatga taqdim etish uchun"
+      );
+    }
 
-    return ctx.reply("1-odamning F.I.Sh ni kiriting:");
-  }
+    if (form.step === "copyReason") {
+      form.reason = text;
+      form.step = "signature";
 
-  if (form.step === "visitorName") {
-    form.visitors.push({
-      name: text,
-      relation: "",
-    });
+      return ctx.reply(
+        "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
+        signatureKeyboard()
+      );
+    }
 
-    form.step = "visitorRelation";
-    return ctx.reply("Bu shaxs sudlanuvchiga kim bo‘ladi?");
-  }
+    if (text === menuButtons.finishPhotos) {
+      if (form.step !== "passportPhotos") {
+        return ctx.reply("Avval rasm yuborish bosqichiga keling.");
+      }
 
-  if (form.step === "visitorRelation") {
-    const currentIndex = form.visitors.length - 1;
-    form.visitors[currentIndex].relation = text;
+      if (!Array.isArray(form.passportPhotos) || !form.passportPhotos.length) {
+        return ctx.reply("Avval kamida bitta pasport rasmini yuboring.");
+      }
 
-    if (form.visitors.length < form.visitorsCount) {
+      form.step = "signature";
+
+      return ctx.reply(
+        "Endi imzo qo‘ying. Tugmani bosib imzo oynasini oching.",
+        signatureKeyboard()
+      );
+    }
+
+    if (text === menuButtons.finishApplication) {
+      if (form.step !== "signature") {
+        return ctx.reply("Avval imzo bosqichiga o‘ting.");
+      }
+
+      if (!form.signature) {
+        form.signature = "test-signature";
+      }
+
+      try {
+        await ctx.reply("PDF tayyorlanmoqda... ⏳");
+
+        const filePath = await generateApplicationPdf(form, bot);
+
+        await ctx.replyWithDocument({ source: filePath });
+        await ctx.reply("Tayyor PDF yuborildi.", mainMenu());
+
+        resetApplicationForm(ctx);
+      } catch (err) {
+        console.error("PDF xatolik:", err);
+        await ctx.reply("PDF yaratishda xatolik yuz berdi.", mainMenu());
+      }
+
+      return;
+    }
+
+    if (
+      text === "/start" ||
+      text === menuButtons.appeal ||
+      text === menuButtons.application ||
+      text === menuButtons.courtsInfo ||
+      text === menuButtons.back ||
+      text === menuButtons.openSignature ||
+      applicationCourtTypes.includes(text) ||
+      applicationTypes.includes(text) ||
+      allCourts.includes(text)
+    ) {
+      return next();
+    }
+
+    if (form.step === "applicantFullName") {
+      form.applicantFullName = text;
+      form.step = "phone";
+      return ctx.reply("Telefon raqamingizni kiriting:");
+    }
+
+    if (form.step === "phone") {
+      form.phone = text;
+      form.step = "address";
+      return ctx.reply("Manzilingizni kiriting:");
+    }
+
+    if (form.step === "address") {
+      form.address = text;
+      form.step = "defendantFullName";
+      return ctx.reply("Sudlanuvchining F.I.Sh ni kiriting:");
+    }
+
+    if (form.step === "defendantFullName") {
+      form.defendantFullName = text;
+      form.step = "visitorsCount";
+      return ctx.reply(
+        "Uchrashuvga nechta odam kiradi? Faqat 1 dan 3 gacha son kiriting:"
+      );
+    }
+
+    if (form.step === "visitorsCount") {
+      const count = Number(text);
+
+      if (!Number.isInteger(count) || count < 1 || count > 3) {
+        return ctx.reply("Noto‘g‘ri son. Faqat 1, 2 yoki 3 kiriting.");
+      }
+
+      form.visitorsCount = count;
+      form.visitors = [];
       form.step = "visitorName";
-      return ctx.reply(`${form.visitors.length + 1}-odamning F.I.Sh ni kiriting:`);
+
+      return ctx.reply("1-odamning F.I.Sh ni kiriting:");
     }
 
-    form.step = "meetingDate";
-    return ctx.reply("Uchrashuv sanasini kiriting:");
-  }
+    if (form.step === "visitorName") {
+      form.visitors.push({
+        name: text,
+        relation: "",
+      });
 
-  if (form.step === "meetingDate") {
-    form.meetingDate = text;
-    form.step = "passportPhotos";
-
-    if (!Array.isArray(form.passportPhotos)) {
-      form.passportPhotos = [];
+      form.step = "visitorRelation";
+      return ctx.reply("Bu shaxs sudlanuvchiga kim bo‘ladi?");
     }
 
-    return ctx.reply(
-      "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
-      finishPhotosKeyboard()
-    );
-  }
+    if (form.step === "visitorRelation") {
+      const currentIndex = form.visitors.length - 1;
+      form.visitors[currentIndex].relation = text;
 
-  return next();
-});
+      if (form.visitors.length < form.visitorsCount) {
+        form.step = "visitorName";
+        return ctx.reply(
+          `${form.visitors.length + 1}-odamning F.I.Sh ni kiriting:`
+        );
+      }
+
+      form.step = "meetingDate";
+      return ctx.reply("Uchrashuv sanasini kiriting:");
+    }
+
+    if (form.step === "meetingDate") {
+      form.meetingDate = text;
+      form.step = "passportPhotos";
+
+      if (!Array.isArray(form.passportPhotos)) {
+        form.passportPhotos = [];
+      }
+
+      return ctx.reply(
+        "Pasport rasmlarini yuboring. Tugatgach pastdagi tugmani bosing.",
+        finishPhotosKeyboard()
+      );
+    }
+
+    return next();
+  });
 }
 
 module.exports = { registerApplication };

@@ -1,19 +1,37 @@
+const { getApplicationTitles } = require("../applications/registry");
+
 const courtTypes = ["Jinoyat", "Iqtisodiy", "Fuqarolik"];
 
-const districts = [
-  "Bektemir",
-  "Chilonzor",
-  "Mirobod",
-  "Mirzo Ulug‘bek",
-  "Olmazor",
-  "Sergeli",
-  "Shayxontohur",
-  "Uchtepa",
-  "Yakkasaroy",
-  "Yashnobod",
-  "Yunusobod",
-  "Yangihayot"
-];
+const courtsByType = {
+  Jinoyat: [
+    "Toshkent shaxar sudi",
+    "Bektemir",
+    "Chilonzor",
+    "Mirobod",
+    "Mirzo Ulug‘bek",
+    "Olmazor",
+    "Sergeli",
+    "Shayxontohur",
+    "Uchtepa",
+    "Yakkasaroy",
+    "Yashnobod",
+    "Yunusobod",
+    "Yangihayot"
+  ],
+
+  Fuqarolik: [
+    "Yakkasaroy tumanlararo sudi",
+    "Uchtepa tumanlararo sudi",
+    "Mirobod tumanlararo sudi",
+    "Mirzo Ulug‘bek tumanlararo sudi",
+    "Shayxontohur tumanlararo sudi"
+  ],
+
+  Iqtisodiy: [
+    "Toshkent shahar iqtisodiy sudi",
+    "Toshkent viloyati iqtisodiy sudi"
+  ]
+};
 
 const menuButtons = {
   appeal: "📨 Murojaat yuborish",
@@ -26,15 +44,11 @@ const menuButtons = {
 };
 
 const applicationCourtTypes = ["Jinoyat", "Iqtisodiy", "Fuqarolik"];
-
-const applicationTypes = [
-  "Sudlanuvchi bilan uchrashuvga ruxsat",
-  "Ish hujjatlari bilan tanishish"
-];
+const applicationTypes = getApplicationTitles();
 
 module.exports = {
   courtTypes,
-  districts,
+  courtsByType, // 🔥 MUHIM
   menuButtons,
   applicationCourtTypes,
   applicationTypes

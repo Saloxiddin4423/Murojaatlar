@@ -1,6 +1,6 @@
 const { Markup } = require("telegraf");
 const {
-  districts,
+  courtsByType,
   menuButtons,
   applicationTypes
 } = require("../config/constants");
@@ -20,15 +20,41 @@ function courtKeyboard() {
   ]).resize();
 }
 
-function districtKeyboard() {
+function districtKeyboard(courtType) {
+  const list = courtsByType[courtType] || [];
+
   const rows = [];
-  for (let i = 0; i < districts.length; i += 2) {
-    rows.push(districts.slice(i, i + 2));
+  let tempRow = [];
+
+  list.forEach((item) => {
+    // Matn uzun bo‘lsa — alohida qator
+    if (item.length > 22) {
+      if (tempRow.length) {
+        rows.push(tempRow);
+        tempRow = [];
+      }
+
+      rows.push([item]);
+      return;
+    }
+
+    // Matn qisqa bo‘lsa — 2 tadan qator
+    tempRow.push(item);
+
+    if (tempRow.length === 2) {
+      rows.push(tempRow);
+      tempRow = [];
+    }
+  });
+
+  if (tempRow.length) {
+    rows.push(tempRow);
   }
+
   rows.push([menuButtons.back]);
+
   return Markup.keyboard(rows).resize();
 }
-
 function applicationCourtKeyboard() {
   return Markup.keyboard([
     ["Jinoyat"],
@@ -38,18 +64,14 @@ function applicationCourtKeyboard() {
 }
 
 function criminalDistrictKeyboard() {
-  const rows = [];
-  for (let i = 0; i < districts.length; i += 2) {
-    rows.push(districts.slice(i, i + 2));
-  }
-  rows.push([menuButtons.back]);
-  return Markup.keyboard(rows).resize();
+  return districtKeyboard("Jinoyat");
 }
 
 function applicationTypesKeyboard() {
   return Markup.keyboard([
     [applicationTypes[0]],
     [applicationTypes[1]],
+    [applicationTypes[2]],
     [menuButtons.back]
   ]).resize();
 }
@@ -75,6 +97,7 @@ function signatureKeyboard() {
     [menuButtons.back]
   ]).resize();
 }
+
 module.exports = {
   mainMenu,
   courtKeyboard,
